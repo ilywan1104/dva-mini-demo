@@ -17,20 +17,23 @@ const reducers = (state, action, reducers) => {
     }
 }
 
-const runEffects = function (gen) {
-    const args = [].slice.call(arguments, 1)
-    const it = gen.apply(this, args)
-    return Promise.resolve()
-        .then(function handleNext(value) {
-            const next = it.next(value)
-            return (next => (next.done
-                ? next.value
-                : Promise.resolve(next.value).then(handleNext, err => console.error(err))
-            ))(next)
-        })
+const runEffects = ({ effect, action, fn }) => {
+    const it = effect.apply(null, [action, fn])
+    const handleNext = value => {
+        const next = it.next(value)
+        return (next => (next.done
+            ? next.value
+            : Promise
+                .resolve(next.value)
+                .then(handleNext, err => console.error(err))
+        ))(next)
+    }
+    return Promise
+        .resolve()
+        .then(handleNext)
 }
 
-const WrappedDispatch = (dispatch, state, effects) => {
+const wrappedDispatch = (dispatch, state, effects) => {
     return function (action) {
         if (effects[action.type]) {
             dispatch({
@@ -48,7 +51,15 @@ const WrappedDispatch = (dispatch, state, effects) => {
                 if (_types.length === 1) _action.type = [types[0], _action.type].join('/')
                 dispatch(_action)
             }
-            runEffects(effects[action.type], action, { select, put, call })
+            runEffects({
+                effect: effects[action.type],
+                action,
+                fn: {
+                    select,
+                    put,
+                    call,
+                },
+            })
                 .then(() => {
                     dispatch({
                         type: 'loading',
@@ -64,38 +75,41 @@ const WrappedDispatch = (dispatch, state, effects) => {
     }
 }
 
-export class Store {
-    store = {
+export const createStore = (models = []) => {
+    const store = {
         _models: {
             loading: {},
         },
         _effects: {},
         _reducers: {}
     }
-    mapActions(key, obj) {
-        if (obj[key] && !!Object.keys(obj[key]).length) {
-            Object.entries(obj[key]).forEach(([k, v]) => {
-                this.store[`_${key}`] = {
-                    ...this.store[`_${key}`],
-                    [`${obj.namespace}/${k}`]: v
-                }
-            })
-        }
-    }
-    useModel(models) {
+    if (models && models.length) {
         models.forEach((model = {}) => {
-            this.store._models = {
-                ...this.store._models,
+            store._models = {
+                ...store._models,
                 [model.namespace]: model.state
             }
-            this.mapActions('effects', model)
-            this.mapActions('reducers', model)
+
+            Object.entries(model.effects).forEach(([key, value]) => {
+                store._effects = {
+                    ...store._effects,
+                    [`${model.namespace}/${key}`]: value
+                }
+            })
+
+            Object.entries(model.reducers).forEach(([key, value]) => {
+                store._reducers = {
+                    ...store._reducers,
+                    [`${model.namespace}/${key}`]: value
+                }
+            })
         })
     }
+    return store
 }
 
 export const connect = assign => {
-    const Wrapped = Component => {
+    const WrappedComponent = Component => {
         return props => {
             const store = React.useContext(Context)
             return <Component
@@ -105,7 +119,7 @@ export const connect = assign => {
             />
         }
     }
-    return Wrapped
+    return WrappedComponent
 }
 
 export const Provider = ({ children, store }) => {
@@ -113,7 +127,7 @@ export const Provider = ({ children, store }) => {
 
     return (
         <Context.Provider
-            value={{ ...state, dispatch: WrappedDispatch(dispatch, state, store._effects) }}
+            value={{ ...state, dispatch: wrappedDispatch(dispatch, state, store._effects) }}
         >
             {children}
         </Context.Provider>

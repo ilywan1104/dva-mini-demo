@@ -1,18 +1,36 @@
 import * as React from 'react'
-import { Provider, Store } from '@/utils/store'
+import { Provider, connect, createStore } from '@/utils/store'
 import models from './models'
-import './app.css';
 
-const _store = new Store()
+import './app.css'
+import 'anna-remax-ui/esm/button/style/css'
+import 'anna-remax-ui/esm/card/style/css'
+import 'anna-remax-ui/esm/tabs/style/css'
 
-_store.useModel(models)
+const App = ({
+    children,
+    global,
+    loading
+}) => {
+    React.useEffect(() => {
+        console.log('global props::', global, loading)
+    }, [])
 
-const App = props => {
-    return (
-        <Provider store={_store.store}>
-            {props.children}
-        </Provider>
-    )
+    return children
 }
 
-export default App;
+const WrappedApp = connect(({
+    global,
+    loading
+}) => ({
+    global,
+    loading
+}))(App)
+
+export default props => {
+    return (
+        <Provider store={createStore(models)}>
+            <WrappedApp {...props} />
+        </Provider>
+    )
+};

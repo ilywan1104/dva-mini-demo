@@ -2,7 +2,8 @@
 	"miniprogramRoot": "dist/",
 	"setting": {
 		"urlCheck": false,
-		"es6": false,
+		"es6": true,
+		"enhance": false,
 		"postcss": true,
 		"preloadBackgroundData": false,
 		"minified": true,
